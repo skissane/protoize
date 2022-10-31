@@ -1,0 +1,33 @@
+#!/bin/bash
+err() { echo 1>&2 "$*"; }
+die() { err "ERROR: $*"; exit 1; }
+run() { "$@" || die "command failed with rc=$?: $*"; }
+varSet() { run printf -v "$1" "$2"; }
+resolve() {
+	local _var="$1"
+	local _path="$2"
+	local _cwd="$3"
+	if [[ "$_path" = /* ]]; then
+		varSet "$_var" "$_path"
+	else
+		varSet "$_var" "$_cwd/$_path"
+	fi
+}
+
+PROGRAM="$(basename "$0")"
+SCRIPTDIR="$(dirname "$0")"
+ORIGPWD="$(pwd)"
+[[ -d "$ORIGPWD" ]] || die "could not determine working directory"
+run cd "$(dirname "$0")"
+
+file="$1"
+[[ -n "$file" ]] || die "bad arguments; usage: $PROGRAM C-FILE"
+resolve r_file "$file" "$ORIGPWD"
+[[ -f "${r_file}" ]] || die "file not found: ${file}"
+bfile="$(basename "$file")"
+[[ -n "$bfile" ]] || die "failed determining basename: ${file}"
+
+run mkdir -p ./work/
+run cp "${r_file}" ./work/
+DOCKER_ARGS=(-v "$(pwd)/work:/work")
+run make protoize DOCKER_ARGS="${DOCKER_ARGS[*]}" ARGS="./$bfile"
